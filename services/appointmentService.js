@@ -400,7 +400,45 @@ async function bookAppointment(data) {
     if (!data) {
         throw new Error("Appointment data is required.");
     }
+    // ============================================================
+    // VERIFY LINKED CONSULTATION
+    // ============================================================
 
+    const db = getDB();
+
+    let linkedConsultation = null;
+
+    if (consultation_id) {
+        linkedConsultation = await db
+            .collection("consultations")
+            .findOne({
+                consultation_id
+            });
+
+        if (!linkedConsultation) {
+            throw new Error(
+                "The linked consultation was not found."
+            );
+        }
+
+        const selectedDoctorId =
+            linkedConsultation
+                .selected_doctor
+                ?.doctor_id ||
+            linkedConsultation
+                .appointment
+                ?.doctor_id ||
+            null;
+
+        if (
+            selectedDoctorId &&
+            selectedDoctorId !== doctor_id
+        ) {
+            throw new Error(
+                "The selected doctor does not match the consultation."
+            );
+        }
+    }
     const {
         patient_id,
         consultation_id,
@@ -542,12 +580,56 @@ async function bookAppointment(data) {
     // SAVE TO MONGODB
     // --------------------------------------------------------
 
-    const db = getDB();
+    
 
     await db
         .collection("appointments")
         .insertOne(appointment);
+    // ============================================================
+    // UPDATE LINKED CONSULTATION
+    // ============================================================
 
+    if (consultation_id) {
+        await db
+            .collection("consultations")
+            .updateOne(
+                {
+                    consultation_id
+                },
+                {
+                    $set: {
+                        status:
+                            "APPOINTMENT_BOOKED",
+
+                        appointment: {
+                            status:
+                                "CONFIRMED",
+
+                            doctor_id:
+                                doctor_id,
+
+                            appointment_id:
+                                appointment.appointment_id,
+
+                            date:
+                                appointment.appointment_date,
+
+                            time:
+                                appointment.start_time,
+
+                            end_time:
+                                appointment.end_time,
+
+                            mode:
+                                appointment.mode
+                        },
+
+                        updated_at:
+                            new Date().toISOString()
+                    }
+                }
+            );
+    }  
     // --------------------------------------------------------
     // RETURN BOOKING
     // --------------------------------------------------------

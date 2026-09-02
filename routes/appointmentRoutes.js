@@ -119,7 +119,17 @@ router.get(
                 "Appointment slot API error:",
                 error
             );
-
+                        if (
+                error.message ===
+                    "The linked consultation was not found." ||
+                error.message ===
+                    "The selected doctor does not match the consultation."
+            ) {
+                return res.status(400).json({
+                    success: false,
+                    error: error.message
+                });
+            }
             return res.status(500).json({
                 success: false,
                 error:
