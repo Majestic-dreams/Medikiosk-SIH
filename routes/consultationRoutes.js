@@ -520,7 +520,187 @@ router.post("/", async (req, res) => {
 
 });
 
+    // ============================================================
+    // PATCH /api/consultations/:consultationId/history
+    // Save patient-reviewed clinical information
+    // ============================================================
 
+    router.patch(
+        "/:consultationId/history",
+        async (req, res) => {
+            try {
+                const {
+                    consultationId
+                } = req.params;
+
+                const {
+                    symptoms = {},
+                    history = {}
+                } = req.body || {};
+
+                if (!consultationId) {
+                    return res.status(400).json({
+                        success: false,
+                        error:
+                            "consultationId is required."
+                    });
+                }
+
+                if (
+                    !symptoms.chief_complaint ||
+                    !String(
+                        symptoms.chief_complaint
+                    ).trim()
+                ) {
+                    return res.status(400).json({
+                        success: false,
+                        error:
+                            "chief_complaint is required."
+                    });
+                }
+
+                const db = getDB();
+
+                const existingConsultation =
+                    await db
+                        .collection("consultations")
+                        .findOne({
+                            consultation_id:
+                                consultationId
+                        });
+
+                if (!existingConsultation) {
+                    return res.status(404).json({
+                        success: false,
+                        error:
+                            "Consultation not found."
+                    });
+                }
+
+                const reviewedSymptoms = {
+                    ...existingConsultation.symptoms,
+
+                    chief_complaint:
+                        String(
+                            symptoms.chief_complaint
+                        ).trim(),
+
+                    duration:
+                        symptoms.duration
+                            ? String(
+                                symptoms.duration
+                            ).trim()
+                            : null,
+
+                    associated_symptoms:
+                        Array.isArray(
+                            symptoms.associated_symptoms
+                        )
+                            ? symptoms.associated_symptoms
+                                .map(value =>
+                                    String(value).trim()
+                                )
+                                .filter(Boolean)
+                            : [],
+
+                    severity:
+                        symptoms.severity ||
+                        existingConsultation
+                            .symptoms
+                            ?.severity ||
+                        null,
+
+                    onset:
+                        symptoms.onset ||
+                        existingConsultation
+                            .symptoms
+                            ?.onset ||
+                        null
+                };
+
+                const reviewedHistory = {
+                    ...existingConsultation.history,
+
+                    relevant_history:
+                        history.relevant_history ||
+                        null,
+
+                    medications:
+                        history.medications ||
+                        null,
+
+                    allergies:
+                        history.allergies ||
+                        null
+                };
+
+                await db
+                    .collection("consultations")
+                    .updateOne(
+                        {
+                            consultation_id:
+                                consultationId
+                        },
+                        {
+                            $set: {
+                                symptoms:
+                                    reviewedSymptoms,
+
+                                history:
+                                    reviewedHistory,
+
+                                patient_review_status:
+                                    "REVIEWED",
+
+                                patient_reviewed_at:
+                                    new Date()
+                                        .toISOString(),
+
+                                updated_at:
+                                    new Date()
+                                        .toISOString()
+                            }
+                        }
+                    );
+
+                const updatedConsultation =
+                    await db
+                        .collection("consultations")
+                        .findOne(
+                            {
+                                consultation_id:
+                                    consultationId
+                            },
+                            {
+                                projection: {
+                                    _id: 0
+                                }
+                            }
+                        );
+
+                return res.status(200).json({
+                    success: true,
+                    message:
+                        "Reviewed clinical information saved successfully.",
+                    consultation:
+                        updatedConsultation
+                });
+            } catch (error) {
+                console.error(
+                    "Consultation history update error:",
+                    error
+                );
+
+                return res.status(500).json({
+                    success: false,
+                    error:
+                        "Failed to save reviewed clinical information.",
+                    message:
+                        error.message
+                });
+            }
+        }
+    );
 // ============================================================
 // GET /api/consultations/:consultationId
 // ============================================================
