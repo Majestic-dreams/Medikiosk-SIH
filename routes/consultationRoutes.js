@@ -41,6 +41,10 @@ function normalizePatientInput(body) {
     return {
 
         patient: {
+            patient_id:
+                patient.patient_id ||
+                body.patient_id ||
+                null,
 
             name:
                 patient.name || null,
