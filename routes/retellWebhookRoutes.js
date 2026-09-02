@@ -103,6 +103,19 @@ router.post("/webhook", async (req, res) => {
                 call.call_status ||
                 null,
 
+            links: {
+                patient_id:
+                    analysis.patient_id ||
+                    null,
+
+                consultation_id:
+                    analysis.consultation_id ||
+                    null,
+
+                selected_doctor_id:
+                    analysis.selected_doctor_id ||
+                    null
+            },
             patient: {
 
                 name:
