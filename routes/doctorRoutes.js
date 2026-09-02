@@ -1,5 +1,7 @@
 const express = require("express");
-
+const {
+    getDB
+} = require("../config/mongodb");
 const {
     searchDoctors
 } = require("../services/doctorService");
@@ -45,7 +47,85 @@ router.get("/", async (req, res) => {
             location
         });
 
+        // ============================================================
+// GET /api/doctors/cases/recent
+// Return Retell-created MongoDB consultations for dashboard
+// ============================================================
 
+router.get(
+    "/cases/recent",
+    async (req, res) => {
+        try {
+            const {
+                doctor_id,
+                limit
+            } = req.query;
+
+            const parsedLimit =
+                Math.min(
+                    Math.max(
+                        Number(limit) || 25,
+                        1
+                    ),
+                    100
+                );
+
+            const query = {};
+
+            /*
+             * If a real MongoDB doctor ID is supplied,
+             * return only consultations assigned to that doctor.
+             *
+             * Without doctor_id, return recent cases for the
+             * prototype dashboard.
+             */
+            if (doctor_id) {
+                query[
+                    "selected_doctor.doctor_id"
+                ] = String(doctor_id);
+            }
+
+            const db = getDB();
+
+            const consultations =
+                await db
+                    .collection("consultations")
+                    .find(
+                        query,
+                        {
+                            projection: {
+                                _id: 0
+                            }
+                        }
+                    )
+                    .sort({
+                        created_at: -1
+                    })
+                    .limit(parsedLimit)
+                    .toArray();
+
+            return res.status(200).json({
+                success: true,
+                count:
+                    consultations.length,
+                consultations
+            });
+        } catch (error) {
+            console.error(
+                "Doctor dashboard cases error:",
+                error
+            );
+
+            return res.status(500).json({
+                success: false,
+                error:
+                    "Failed to retrieve doctor dashboard cases.",
+                message:
+                    error.message
+            });
+        }
+    }
+);
         // ====================================================
         // SEARCH DOCTORS
         // ====================================================
