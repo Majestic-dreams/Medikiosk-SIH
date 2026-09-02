@@ -39,6 +39,8 @@ function normalizePatientInput(body) {
     const history = body.history || {};
 
     return {
+        preferred_ayush_system:
+        body.preferred_ayush_system || null,
 
         patient: {
             patient_id:
@@ -259,7 +261,8 @@ router.post("/", async (req, res) => {
             createConsultation(
                 normalizedInput
             );
-
+            consultation.patient_ayush_preference =
+        normalizedInput.preferred_ayush_system;
 
         consultation.consultation_id =
             generateConsultationId();
@@ -311,9 +314,17 @@ router.post("/", async (req, res) => {
             // FIRST: PRIMARY DEPARTMENT
             // ------------------------------------------------
 
+            const doctorRoutingCriteria = {
+                ...routingResult.routing,
+
+                ayush_system:
+                    normalizedInput.preferred_ayush_system ||
+                    routingResult.routing.ayush_system
+            };
+
             matchedDoctors =
                 findDoctorsForRouting(
-                    routingResult.routing
+                    doctorRoutingCriteria
                 );
 
 
@@ -340,6 +351,7 @@ router.post("/", async (req, res) => {
                     findDoctorsForRouting({
 
                         ayush_system:
+                            normalizedInput.preferred_ayush_system ||
                             routingResult.routing.ayush_system,
 
                         department:
