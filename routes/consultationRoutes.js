@@ -40,7 +40,10 @@ function normalizePatientInput(body) {
 
     return {
         preferred_ayush_system:
-        body.preferred_ayush_system || null,
+            body.preferred_ayush_system &&
+            body.preferred_ayush_system !== "No preference"
+                ? body.preferred_ayush_system
+                : null,
 
         patient: {
             patient_id:
@@ -1056,6 +1059,149 @@ router.post(
     }
 );
 
+// ============================================================
+// POST /api/consultations/:consultationId/select-doctor
+// Save the patient's selected doctor
+// ============================================================
+
+router.post(
+    "/:consultationId/select-doctor",
+    async (req, res) => {
+        try {
+            const { consultationId } = req.params;
+            const { doctor_id } = req.body;
+
+            if (!consultationId) {
+                return res.status(400).json({
+                    success: false,
+                    error: "consultationId is required."
+                });
+            }
+
+            if (!doctor_id) {
+                return res.status(400).json({
+                    success: false,
+                    error: "doctor_id is required."
+                });
+            }
+
+            const db = getDB();
+
+            // Find the existing consultation
+            const consultation = await db
+                .collection("consultations")
+                .findOne({
+                    consultation_id: consultationId
+                });
+
+            if (!consultation) {
+                return res.status(404).json({
+                    success: false,
+                    error: "Consultation not found."
+                });
+            }
+
+            // Verify that the doctor exists in MongoDB
+            const doctor = await db
+                .collection("doctor_records")
+                .findOne({
+                    doctor_id
+                });
+
+            if (!doctor) {
+                return res.status(404).json({
+                    success: false,
+                    error: "Doctor not found.",
+                    doctor_id
+                });
+            }
+
+            // Only allow a doctor returned for this consultation
+            const matchedDoctors =
+                consultation.doctors?.matched || [];
+
+            const doctorWasOffered =
+                matchedDoctors.some(
+                    matchedDoctor =>
+                        matchedDoctor.doctor_id === doctor_id
+                );
+
+            if (!doctorWasOffered) {
+                return res.status(400).json({
+                    success: false,
+                    error:
+                        "The selected doctor was not offered for this consultation."
+                });
+            }
+
+            const selectedDoctor = {
+                doctor_id: doctor.doctor_id,
+                doctor_name:
+                    doctor.doctor_name || null,
+                ayush_system:
+                    doctor.ayush_system || null,
+                department:
+                    doctor.department || null,
+                clinic_name:
+                    doctor.clinic_name || null,
+                location:
+                    doctor.location || null,
+                appointment_mode:
+                    doctor.appointment_mode || null
+            };
+
+            await db
+                .collection("consultations")
+                .updateOne(
+                    {
+                        consultation_id: consultationId
+                    },
+                    {
+                        $set: {
+                            selected_doctor:
+                                selectedDoctor,
+
+                            "appointment.doctor_id":
+                                doctor.doctor_id,
+
+                            "appointment.status":
+                                "NOT_BOOKED",
+
+                            updated_at:
+                                new Date().toISOString()
+                        }
+                    }
+                );
+
+            return res.status(200).json({
+                success: true,
+                message:
+                    "Selected doctor saved successfully.",
+
+                selection_status:
+                    "DOCTOR_SELECTED",
+
+                consultation_id:
+                    consultationId,
+
+                selected_doctor:
+                    selectedDoctor
+            });
+        } catch (error) {
+            console.error(
+                "Doctor selection error:",
+                error
+            );
+
+            return res.status(500).json({
+                success: false,
+                error:
+                    "Failed to save selected doctor.",
+                message: error.message
+            });
+        }
+    }
+);
 
 // ============================================================
 // EXPORT ROUTER
